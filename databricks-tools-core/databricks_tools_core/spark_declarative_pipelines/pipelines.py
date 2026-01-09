@@ -8,7 +8,6 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.pipelines import (
     CreatePipelineResponse,
     GetPipelineResponse,
@@ -18,6 +17,8 @@ from databricks.sdk.service.pipelines import (
     GetUpdateResponse,
     UpdateInfoState,
 )
+
+from ..auth import get_workspace_client
 
 
 # Terminal states - pipeline update has finished (success or failure)
@@ -134,7 +135,7 @@ def find_pipeline_by_name(name: str) -> Optional[str]:
     Returns:
         Pipeline ID if found, None otherwise
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # List pipelines with name filter and find exact match
     for pipeline in w.pipelines.list_pipelines(filter=f"name LIKE '{name}'"):
@@ -167,7 +168,7 @@ def create_pipeline(
     Raises:
         DatabricksError: If pipeline already exists or API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     libraries = _build_libraries(workspace_file_paths)
 
     return w.pipelines.create(
@@ -191,7 +192,7 @@ def get_pipeline(pipeline_id: str) -> GetPipelineResponse:
     Returns:
         GetPipelineResponse with full pipeline configuration and state
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.pipelines.get(pipeline_id=pipeline_id)
 
 
@@ -214,7 +215,7 @@ def update_pipeline(
         schema: New schema name
         workspace_file_paths: New list of file paths (raw .sql or .py files)
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     kwargs: Dict[str, Any] = {"pipeline_id": pipeline_id}
 
@@ -239,7 +240,7 @@ def delete_pipeline(pipeline_id: str) -> None:
     Args:
         pipeline_id: Pipeline ID
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.pipelines.delete(pipeline_id=pipeline_id)
 
 
@@ -263,7 +264,7 @@ def start_update(
     Returns:
         Update ID for polling status
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     response = w.pipelines.start_update(
         pipeline_id=pipeline_id,
@@ -287,7 +288,7 @@ def get_update(pipeline_id: str, update_id: str) -> GetUpdateResponse:
     Returns:
         GetUpdateResponse with update status (QUEUED, RUNNING, COMPLETED, FAILED, etc.)
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.pipelines.get_update(
         pipeline_id=pipeline_id,
         update_id=update_id
@@ -301,7 +302,7 @@ def stop_pipeline(pipeline_id: str) -> None:
     Args:
         pipeline_id: Pipeline ID
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.pipelines.stop(pipeline_id=pipeline_id)
 
 
@@ -321,7 +322,7 @@ def get_pipeline_events(
     Returns:
         List of PipelineEvent objects with error details
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     events = w.pipelines.list_pipeline_events(
         pipeline_id=pipeline_id,
         max_results=max_results
@@ -354,7 +355,7 @@ def wait_for_pipeline_update(
     Raises:
         TimeoutError: If pipeline doesn't complete within timeout
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     start_time = time.time()
 
     while True:

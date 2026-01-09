@@ -72,6 +72,10 @@ class Conversation(Base):
   # Databricks cluster ID for code execution
   cluster_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+  # Default Unity Catalog context
+  default_catalog: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+  default_schema: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
   # Relationships
   project: Mapped['Project'] = relationship('Project', back_populates='conversations')
   messages: Mapped[List['Message']] = relationship(
@@ -89,6 +93,8 @@ class Conversation(Base):
       'created_at': self.created_at.isoformat() if self.created_at else None,
       'session_id': self.session_id,
       'cluster_id': self.cluster_id,
+      'default_catalog': self.default_catalog,
+      'default_schema': self.default_schema,
       'messages': [m.to_dict() for m in self.messages] if self.messages else [],
     }
 
@@ -100,6 +106,8 @@ class Conversation(Base):
       'title': self.title,
       'created_at': self.created_at.isoformat() if self.created_at else None,
       'cluster_id': self.cluster_id,
+      'default_catalog': self.default_catalog,
+      'default_schema': self.default_schema,
       'message_count': len(self.messages) if self.messages else 0,
     }
 

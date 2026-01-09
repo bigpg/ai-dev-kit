@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from databricks.sdk import WorkspaceClient
 
+from ...auth import get_workspace_client
 from .executor import SQLExecutor
 from .models import (
     ColumnDetail,
@@ -96,7 +97,7 @@ class TableStatsCollector:
         """
         self.warehouse_id = warehouse_id
         self.max_workers = max_workers
-        self.client = client or WorkspaceClient()
+        self.client = client or get_workspace_client()
         self.executor = SQLExecutor(warehouse_id=warehouse_id, client=self.client)
 
     def list_tables(self, catalog: str, schema: str) -> List[Dict[str, Any]]:

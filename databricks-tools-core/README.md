@@ -36,10 +36,15 @@ pip install -e .
 
 ## Authentication
 
-All functions use the official `databricks-sdk` and handle authentication automatically via:
+All functions use `get_workspace_client()` from the `auth` module, which supports multiple authentication methods:
 
-1. **Environment variables**: `DATABRICKS_HOST` and `DATABRICKS_TOKEN`
-2. **Config profile**: `DATABRICKS_CONFIG_PROFILE` or `~/.databrickscfg`
+### Authentication Priority
+
+1. **Context variables** (for multi-user apps) - Set via `set_databricks_auth()`
+2. **Environment variables** - `DATABRICKS_HOST` and `DATABRICKS_TOKEN`
+3. **Config profile** - `DATABRICKS_CONFIG_PROFILE` or `~/.databrickscfg`
+
+### Single-User Mode (CLI, Scripts, Notebooks)
 
 ```bash
 # Option 1: Environment variables
@@ -49,6 +54,67 @@ export DATABRICKS_TOKEN="your-token"
 # Option 2: Config profile
 export DATABRICKS_CONFIG_PROFILE="my-profile"
 ```
+
+Then use functions directly:
+
+```python
+from databricks_tools_core.sql import execute_sql
+
+result = execute_sql("SELECT 1")  # Uses env vars or config
+```
+
+### Multi-User Mode (Web Apps, APIs)
+
+For applications serving multiple users, use contextvars to set per-request credentials:
+
+```python
+from databricks_tools_core.auth import (
+    set_databricks_auth,
+    clear_databricks_auth,
+    get_workspace_client,
+)
+
+# In your request handler
+async def handle_request(user_host: str, user_token: str):
+    set_databricks_auth(user_host, user_token)
+    try:
+        # All functions now use this user's credentials
+        result = execute_sql("SELECT current_user()")
+
+        # Or get client directly
+        client = get_workspace_client()
+        warehouses = client.warehouses.list()
+    finally:
+        clear_databricks_auth()
+```
+
+**How it works:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Authentication Flow                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  set_databricks_auth(host, token)                               │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌─────────────────────────┐                                    │
+│  │ contextvars             │  (async-safe, per-request)         │
+│  │ _host_ctx = host        │                                    │
+│  │ _token_ctx = token      │                                    │
+│  └───────────┬─────────────┘                                    │
+│              │                                                  │
+│              ▼                                                  │
+│  get_workspace_client()                                         │
+│         │                                                       │
+│         ├─── Has context? ──► WorkspaceClient(host, token)      │
+│         │                                                       │
+│         └─── No context? ───► WorkspaceClient()  (uses env/cfg) │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+This pattern is used by `databricks-mcp-app` to handle per-user authentication when deployed as a Databricks App, where each request includes the user's access token in headers.
 
 ## Usage
 
@@ -179,6 +245,7 @@ table = tables.create_table(
 ```
 databricks-tools-core/
 ├── databricks_tools_core/
+│   ├── auth.py                       # Authentication (contextvars + env vars)
 │   ├── sql/                          # SQL operations
 │   │   ├── sql.py                    # execute_sql, execute_sql_multi
 │   │   ├── warehouse.py              # list_warehouses, get_best_warehouse

@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState
 
+from ...auth import get_workspace_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +42,7 @@ class SQLExecutor:
                 "Either specify a warehouse_id or let the system select one automatically."
             )
         self.warehouse_id = warehouse_id
-        self.client = client or WorkspaceClient()
+        self.client = client or get_workspace_client()
 
     def execute(
         self,

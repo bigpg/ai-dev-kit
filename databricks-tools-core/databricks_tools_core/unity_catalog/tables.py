@@ -4,8 +4,9 @@ Unity Catalog - Table Operations
 Functions for managing tables in Unity Catalog.
 """
 from typing import List, Optional
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import TableInfo, ColumnInfo, TableType, DataSourceFormat
+
+from ..auth import get_workspace_client
 
 
 def list_tables(catalog_name: str, schema_name: str) -> List[TableInfo]:
@@ -22,7 +23,7 @@ def list_tables(catalog_name: str, schema_name: str) -> List[TableInfo]:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return list(w.tables.list(
         catalog_name=catalog_name,
         schema_name=schema_name
@@ -46,7 +47,7 @@ def get_table(full_table_name: str) -> TableInfo:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.tables.get(full_name=full_table_name)
 
 
@@ -79,7 +80,7 @@ def create_table(
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # Build full table name for updates
     full_name = f"{catalog_name}.{schema_name}.{table_name}"
@@ -128,5 +129,5 @@ def delete_table(full_table_name: str) -> None:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.tables.delete(full_name=full_table_name)

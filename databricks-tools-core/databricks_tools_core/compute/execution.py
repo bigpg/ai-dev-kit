@@ -6,8 +6,9 @@ Uses Databricks Command Execution API via SDK.
 """
 import datetime
 from typing import Optional
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.compute import CommandStatus, Language
+
+from ..auth import get_workspace_client
 
 
 class ExecutionResult:
@@ -45,7 +46,7 @@ def create_context(cluster_id: str, language: str = "python") -> str:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # Convert string to Language enum
     lang_map = {
@@ -89,7 +90,7 @@ def execute_command_with_context(
         DatabricksError: If API request fails
         TimeoutError: If execution exceeds timeout
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     try:
         # Execute and wait for result with timeout
@@ -138,7 +139,7 @@ def destroy_context(cluster_id: str, context_id: str) -> None:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.command_execution.destroy(
         cluster_id=cluster_id,
         context_id=context_id

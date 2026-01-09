@@ -11,6 +11,3 @@ mcp = FastMCP("Databricks MCP Server")
 
 # Import and register all tools
 from .tools import sql, compute, file, pipelines
-
-if __name__ == "__main__":
-    mcp.run()

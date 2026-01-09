@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from ..services.agent import get_project_directory, stream_agent_response
 from ..services.backup_manager import mark_for_backup
 from ..services.storage import ConversationStorage, ProjectStorage
-from ..services.user import get_current_user
+from ..services.user import get_current_user, get_current_token, get_workspace_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -51,6 +51,8 @@ class InvokeAgentRequest(BaseModel):
   conversation_id: Optional[str] = None  # Will create new if not provided
   message: str
   cluster_id: Optional[str] = None  # Databricks cluster for code execution
+  default_catalog: Optional[str] = None  # Default Unity Catalog
+  default_schema: Optional[str] = None  # Default schema
 
 
 @router.post('/invoke_agent')
@@ -74,8 +76,10 @@ async def invoke_agent(request: Request, body: InvokeAgentRequest):
     f'Invoking agent for project: {body.project_id}, conversation: {body.conversation_id}'
   )
 
-  # Get current user
+  # Get current user and Databricks auth
   user_email = await get_current_user(request)
+  user_token = await get_current_token(request)
+  workspace_url = get_workspace_url()
 
   # Verify project exists and belongs to user
   project_storage = ProjectStorage(user_email)
@@ -124,6 +128,10 @@ async def invoke_agent(request: Request, body: InvokeAgentRequest):
         message=body.message,
         session_id=session_id,
         cluster_id=body.cluster_id,
+        default_catalog=body.default_catalog,
+        default_schema=body.default_schema,
+        databricks_host=workspace_url,
+        databricks_token=user_token,
       ):
         event_type = event.get('type', '')
 
@@ -167,6 +175,7 @@ async def invoke_agent(request: Request, body: InvokeAgentRequest):
 
         elif event_type == 'error':
           error_message = event.get('error', 'Unknown error')
+          logger.error(f'Agent error received: {error_message}')
           yield sse_event({'type': 'error', 'error': error_message})
 
         elif event_type == 'system':
@@ -194,15 +203,19 @@ async def invoke_agent(request: Request, body: InvokeAgentRequest):
         content=body.message,
       )
 
-      # Save assistant response
+      # Save assistant response (or error)
       if final_text or error_message:
         content = final_text if final_text else f'Error: {error_message}'
+        is_error = bool(error_message and not final_text)
+        logger.info(f'Saving assistant message: {len(content)} chars, is_error={is_error}')
         await conv_storage.add_message(
           conversation_id=conversation_id,
           role='assistant',
           content=content,
-          is_error=error_message is not None,
+          is_error=is_error,
         )
+      else:
+        logger.warning('No response to save (no text and no error)')
 
       # Update session_id for conversation resumption
       if new_session_id:
@@ -211,6 +224,12 @@ async def invoke_agent(request: Request, body: InvokeAgentRequest):
       # Update cluster_id if provided
       if body.cluster_id:
         await conv_storage.update_cluster_id(conversation_id, body.cluster_id)
+
+      # Update catalog/schema if provided
+      if body.default_catalog or body.default_schema:
+        await conv_storage.update_catalog_schema(
+          conversation_id, body.default_catalog, body.default_schema
+        )
 
       logger.info(
         f'Saved messages to conversation {conversation_id}: '

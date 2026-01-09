@@ -1,15 +1,23 @@
 """Claude Code Agent service for managing agent sessions.
 
-Uses the claude-code-sdk to create and manage Claude Code agent sessions
-with directory-scoped file permissions and Databricks MCP tools.
+Uses the claude-agent-sdk to create and manage Claude Code agent sessions
+with directory-scoped file permissions and Databricks tools.
+
+Databricks tools are loaded in-process from databricks-mcp-server using
+the SDK tool wrapper. Auth is handled via contextvars for multi-user support.
+
+NOTE: There is a known bug in claude-agent-sdk (issue #462) where the subprocess
+transport fails in FastAPI/uvicorn contexts when using MCP servers.
 """
 
 import logging
+import traceback
+import sys
 from pathlib import Path
 from typing import AsyncIterator
 
-from claude_code_sdk import ClaudeCodeOptions, query
-from claude_code_sdk.types import (
+from claude_agent_sdk import ClaudeAgentOptions, query
+from claude_agent_sdk.types import (
   AssistantMessage,
   ResultMessage,
   StreamEvent,
@@ -20,9 +28,10 @@ from claude_code_sdk.types import (
   ToolUseBlock,
   UserMessage,
 )
+from databricks_tools_core.auth import set_databricks_auth, clear_databricks_auth
 
 from .backup_manager import ensure_project_directory as _ensure_project_directory
-from .mcp_client import get_databricks_mcp_config, get_databricks_mcp_tools
+from .databricks_tools import load_databricks_tools
 from .system_prompt import get_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -37,6 +46,18 @@ BUILTIN_TOOLS = [
   'Grep',
   'Skill',  # For loading skills
 ]
+
+# Cached Databricks tools (loaded once)
+_databricks_server = None
+_databricks_tool_names = None
+
+
+def get_databricks_tools():
+  """Get cached Databricks tools, loading if needed."""
+  global _databricks_server, _databricks_tool_names
+  if _databricks_server is None:
+    _databricks_server, _databricks_tool_names = load_databricks_tools()
+  return _databricks_server, _databricks_tool_names
 
 
 def get_project_directory(project_id: str) -> Path:
@@ -59,6 +80,10 @@ async def stream_agent_response(
   message: str,
   session_id: str | None = None,
   cluster_id: str | None = None,
+  default_catalog: str | None = None,
+  default_schema: str | None = None,
+  databricks_host: str | None = None,
+  databricks_token: str | None = None,
 ) -> AsyncIterator[dict]:
   """Stream Claude agent response with all event types.
 
@@ -70,6 +95,8 @@ async def stream_agent_response(
       message: User message to send
       session_id: Optional session ID for resuming conversations
       cluster_id: Optional Databricks cluster ID for code execution
+      databricks_host: Databricks workspace URL for auth context
+      databricks_token: User's Databricks access token for auth context
 
   Yields:
       Event dicts with 'type' field for frontend consumption
@@ -81,32 +108,40 @@ async def stream_agent_response(
   else:
     logger.info(f'Starting new session in {project_dir}: {message[:100]}...')
 
-  # Build allowed tools list
-  allowed_tools = BUILTIN_TOOLS.copy()
-
-  # Get MCP server config and tools if Databricks is configured
-  mcp_servers = get_databricks_mcp_config()
-  if mcp_servers:
-    # Dynamically fetch available tools from MCP server (cached after first call)
-    databricks_tools = await get_databricks_mcp_tools()
-    if databricks_tools:
-      allowed_tools.extend(databricks_tools)
-      logger.info(f'Databricks MCP tools enabled: {len(databricks_tools)} tools')
-
-  # Generate system prompt with available skills and cluster info
-  system_prompt = get_system_prompt(cluster_id=cluster_id)
-
-  options = ClaudeCodeOptions(
-    cwd=str(project_dir),
-    allowed_tools=allowed_tools,
-    permission_mode='acceptEdits',  # Auto-accept file edits
-    resume=session_id,  # Resume from previous session if provided
-    mcp_servers=mcp_servers,  # Add Databricks MCP server
-    system_prompt=system_prompt,  # Databricks-focused system prompt
-  )
+  # Set auth context for this request (enables per-user Databricks auth)
+  set_databricks_auth(databricks_host, databricks_token)
 
   try:
-    async for msg in query(prompt=message, options=options):
+    # Build allowed tools list
+    allowed_tools = BUILTIN_TOOLS.copy()
+
+    # Get in-process Databricks tools
+    databricks_server, databricks_tool_names = get_databricks_tools()
+    allowed_tools.extend(databricks_tool_names)
+    logger.info(f'Databricks tools enabled: {len(databricks_tool_names)} tools')
+
+    # Generate system prompt with available skills, cluster, and catalog/schema context
+    system_prompt = get_system_prompt(
+      cluster_id=cluster_id,
+      default_catalog=default_catalog,
+      default_schema=default_schema,
+    )
+
+    options = ClaudeAgentOptions(
+      cwd=str(project_dir),
+      allowed_tools=allowed_tools,
+      permission_mode='acceptEdits',  # Auto-accept file edits
+      resume=session_id,  # Resume from previous session if provided
+      mcp_servers={'databricks': databricks_server},  # In-process SDK tools
+      system_prompt=system_prompt,  # Databricks-focused system prompt
+    )
+
+    # Workaround for SDK bug: use async generator for prompt when using MCP servers
+    # See: https://github.com/anthropics/claude-agent-sdk-python/issues/386
+    async def prompt_generator():
+      yield {'type': 'user', 'message': {'role': 'user', 'content': message}}
+
+    async for msg in query(prompt=prompt_generator(), options=options):
       # Handle different message types
       if isinstance(msg, AssistantMessage):
         # Process content blocks
@@ -166,11 +201,37 @@ async def stream_agent_response(
         }
 
   except Exception as e:
-    logger.error(f'Error during Claude query: {e}')
+    # Log full traceback for debugging
+    error_msg = f'Error during Claude query: {e}'
+    full_traceback = traceback.format_exc()
+
+    # Use print to stderr for immediate visibility
+    print(f'\n{"="*60}', file=sys.stderr)
+    print(f'AGENT ERROR: {error_msg}', file=sys.stderr)
+    print(full_traceback, file=sys.stderr)
+
+    # Also log normally
+    logger.error(error_msg)
+    logger.error(full_traceback)
+
+    # If it's an ExceptionGroup, log all sub-exceptions
+    if hasattr(e, 'exceptions'):
+      for i, sub_exc in enumerate(e.exceptions):
+        sub_tb = ''.join(traceback.format_exception(type(sub_exc), sub_exc, sub_exc.__traceback__))
+        print(f'Sub-exception {i}: {sub_exc}', file=sys.stderr)
+        print(sub_tb, file=sys.stderr)
+        logger.error(f'Sub-exception {i}: {sub_exc}')
+        logger.error(sub_tb)
+
+    print(f'{"="*60}\n', file=sys.stderr)
+
     yield {
       'type': 'error',
       'error': str(e),
     }
+  finally:
+    # Always clear auth context when done
+    clear_databricks_auth()
 
 
 # Keep simple aliases for backward compatibility

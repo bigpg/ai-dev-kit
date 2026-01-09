@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from databricks.sdk import WorkspaceClient
 
+from ..auth import get_workspace_client
 from .models import (
     EndpointStatus,
     EvaluationRunDict,
@@ -92,7 +93,7 @@ class AgentBricksManager:
             default_timeout_s: Default timeout for polling operations
             default_poll_s: Default poll interval in seconds
         """
-        self.w: WorkspaceClient = client or WorkspaceClient()
+        self.w: WorkspaceClient = client or get_workspace_client()
         self.default_timeout_s = default_timeout_s
         self.default_poll_s = default_poll_s
 

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from databricks.sdk import WorkspaceClient
 
+from ...auth import get_workspace_client
 from .dependency_analyzer import SQLDependencyAnalyzer
 from .executor import SQLExecutor, SQLExecutionError
 
@@ -43,7 +44,7 @@ class SQLParallelExecutor:
         """
         self.warehouse_id = warehouse_id
         self.max_workers = max_workers
-        self.client = client or WorkspaceClient()
+        self.client = client or get_workspace_client()
         self.analyzer = SQLDependencyAnalyzer()
         self.sql_executor = SQLExecutor(warehouse_id=warehouse_id, client=self.client)
 

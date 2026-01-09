@@ -3,13 +3,19 @@
 from .skills_manager import get_available_skills
 
 
-def get_system_prompt(cluster_id: str | None = None) -> str:
+def get_system_prompt(
+  cluster_id: str | None = None,
+  default_catalog: str | None = None,
+  default_schema: str | None = None,
+) -> str:
   """Generate the system prompt for the Claude agent.
 
   Explains Databricks capabilities, available MCP tools, and skills.
 
   Args:
       cluster_id: Optional Databricks cluster ID for code execution
+      default_catalog: Optional default Unity Catalog name
+      default_schema: Optional default schema name
 
   Returns:
       System prompt string
@@ -45,8 +51,33 @@ You have a Databricks cluster selected for code execution:
 When using `execute_databricks_command` or `run_python_file_on_databricks`, use this cluster_id.
 """
 
+  catalog_schema_section = ''
+  if default_catalog or default_schema:
+    catalog_schema_section = """
+## Default Unity Catalog Context
+
+The user has configured default catalog/schema settings:"""
+    if default_catalog:
+      catalog_schema_section += f"""
+- **Default Catalog:** `{default_catalog}`"""
+    if default_schema:
+      catalog_schema_section += f"""
+- **Default Schema:** `{default_schema}`"""
+    catalog_schema_section += """
+
+**IMPORTANT:** Use these defaults for all operations unless the user specifies otherwise:
+- SQL queries: Use `{catalog}.{schema}.table_name` format
+- Creating tables/pipelines: Target this catalog/schema
+- Volumes: Use `/Volumes/{catalog}/{schema}/...` (default to raw_data for volume name for raw data)
+- When writing CLAUDE.md, record these as the project's catalog/schema
+"""
+    if default_catalog:
+      catalog_schema_section = catalog_schema_section.replace('{catalog}', default_catalog)
+    if default_schema:
+      catalog_schema_section = catalog_schema_section.replace('{schema}', default_schema)
+
   return f"""# Databricks AI Dev Kit
-{cluster_section}
+{cluster_section}{catalog_schema_section}
 
 You are a Databricks development assistant with access to powerful MCP tools for building data pipelines,
 running SQL queries, managing infrastructure, and deploying assets to Databricks.

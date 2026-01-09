@@ -4,8 +4,9 @@ Unity Catalog - Schema Operations
 Functions for managing schemas (databases) in Unity Catalog.
 """
 from typing import List, Optional
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import SchemaInfo
+
+from ..auth import get_workspace_client
 
 
 def list_schemas(catalog_name: str) -> List[SchemaInfo]:
@@ -21,7 +22,7 @@ def list_schemas(catalog_name: str) -> List[SchemaInfo]:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return list(w.schemas.list(catalog_name=catalog_name))
 
 
@@ -41,7 +42,7 @@ def get_schema(full_schema_name: str) -> SchemaInfo:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.schemas.get(full_name=full_schema_name)
 
 
@@ -64,7 +65,7 @@ def create_schema(
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.schemas.create(
         name=schema_name,
         catalog_name=catalog_name,
@@ -97,7 +98,7 @@ def update_schema(
     if not any([new_name, comment, owner]):
         raise ValueError("At least one field (new_name, comment, or owner) must be provided")
 
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.schemas.update(
         full_name=full_schema_name,
         new_name=new_name,
@@ -116,5 +117,5 @@ def delete_schema(full_schema_name: str) -> None:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.schemas.delete(full_name=full_schema_name)

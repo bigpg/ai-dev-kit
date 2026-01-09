@@ -199,6 +199,30 @@ class ConversationStorage:
         return True
       return False
 
+  async def update_catalog_schema(
+    self,
+    conversation_id: str,
+    default_catalog: str | None,
+    default_schema: str | None,
+  ) -> bool:
+    """Update default Unity Catalog context for the conversation."""
+    async with session_scope() as session:
+      result = await session.execute(
+        select(Conversation)
+        .join(Project, Conversation.project_id == Project.id)
+        .where(
+          Conversation.id == conversation_id,
+          Conversation.project_id == self.project_id,
+          Project.user_email == self.user_email,
+        )
+      )
+      conversation = result.scalar_one_or_none()
+      if conversation:
+        conversation.default_catalog = default_catalog
+        conversation.default_schema = default_schema
+        return True
+      return False
+
   async def delete(self, conversation_id: str) -> bool:
     """Delete a conversation and all its messages."""
     async with session_scope() as session:

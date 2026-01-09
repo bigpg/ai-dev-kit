@@ -7,9 +7,9 @@ from itertools import islice
 from threading import Lock
 from typing import Optional
 
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.config import Config
 from databricks.sdk.service.compute import State
+from databricks_tools_core.auth import get_workspace_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,8 @@ def _fetch_clusters_sync(limit: int = 50, timeout: int = 15) -> list[dict]:
   """
   from databricks.sdk.service.compute import ClusterSource, ListClustersFilterBy
 
-  config = Config(http_timeout_seconds=timeout)
-  client = WorkspaceClient(config=config)
+  # Use get_workspace_client to pick up auth context if set
+  client = get_workspace_client()
 
   # Filter out serverless and job clusters at the API level
   filter_by = ListClustersFilterBy(

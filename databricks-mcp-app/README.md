@@ -2,6 +2,18 @@
 
 A web application that provides a Claude Code agent interface with integrated Databricks tools. Users interact with Claude through a chat interface, and the agent can execute SQL queries, manage pipelines, upload files, and more on their Databricks workspace.
 
+> **⚠️ Known Issue: SDK Bug Blocking MCP Server Integration**
+>
+> There is currently a bug in `claude-agent-sdk` ([issue #462](https://github.com/anthropics/claude-agent-sdk-python/issues/462)) that causes the subprocess transport to fail when using MCP servers in FastAPI/uvicorn contexts. The error manifests as:
+>
+> ```
+> CLIConnectionError: ProcessTransport is not ready for writing
+> ```
+>
+> **Status:** Waiting for upstream fix from Anthropic. The app is functional but agent invocations with Databricks tools will fail until this is resolved.
+>
+> **Workaround attempted:** Running queries in separate threads with isolated event loops - did not resolve the issue as the bug is in the SDK's subprocess transport itself.
+
 ## Architecture Overview
 
 ```
@@ -20,7 +32,7 @@ A web application that provides a Claude Code agent interface with integrated Da
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Claude Code Session                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Each user message spawns a Claude Code agent session via claude-code-sdk   │
+│  Each user message spawns a Claude Code agent session via claude-agent-sdk  │
 │                                                                              │
 │  Built-in Tools:              MCP Tools (Databricks):         Skills:       │
 │  ┌──────────────────┐         ┌─────────────────────────┐    ┌───────────┐  │
@@ -50,12 +62,12 @@ A web application that provides a Claude Code agent interface with integrated Da
 
 ### 1. Claude Code Sessions
 
-When a user sends a message, the backend creates a Claude Code session using the `claude-code-sdk`:
+When a user sends a message, the backend creates a Claude Code session using the `claude-agent-sdk`:
 
 ```python
-from claude_code_sdk import ClaudeCodeOptions, query
+from claude_agent_sdk import ClaudeAgentOptions, query
 
-options = ClaudeCodeOptions(
+options = ClaudeAgentOptions(
     cwd=str(project_dir),           # Project working directory
     allowed_tools=allowed_tools,     # Built-in + MCP tools
     permission_mode='acceptEdits',   # Auto-accept file edits
@@ -74,28 +86,88 @@ Key features:
 - **Streaming**: All events (text, thinking, tool_use, tool_result) stream to the frontend in real-time
 - **Project Isolation**: Each project has its own working directory with sandboxed file access
 
-### 2. MCP Integration (Databricks Tools)
+### 2. Authentication Flow
 
-The agent connects to the Databricks MCP server as a stdio subprocess:
+The app supports multi-user authentication using per-request credentials:
 
-```python
-mcp_servers = {
-    'databricks': {
-        'command': 'uv',
-        'args': ['run', 'python', '-m', 'databricks_mcp_server.server'],
-        'env': {'DATABRICKS_HOST': host, 'DATABRICKS_TOKEN': token},
-        'defer_loading': True,  # Start server only when tools are needed
-    }
-}
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Authentication Flow                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Production (Databricks Apps)         Development (Local)                   │
+│  ┌──────────────────────────┐         ┌──────────────────────────┐          │
+│  │ Request Headers:         │         │ Environment Variables:   │          │
+│  │ X-Forwarded-User         │         │ DATABRICKS_HOST          │          │
+│  │ X-Forwarded-Access-Token │         │ DATABRICKS_TOKEN         │          │
+│  └────────────┬─────────────┘         └────────────┬─────────────┘          │
+│               │                                    │                        │
+│               └──────────────┬─────────────────────┘                        │
+│                              ▼                                              │
+│               ┌──────────────────────────┐                                  │
+│               │ set_databricks_auth()    │  (contextvars)                   │
+│               │ - host                   │                                  │
+│               │ - token                  │                                  │
+│               └────────────┬─────────────┘                                  │
+│                            ▼                                                │
+│               ┌──────────────────────────┐                                  │
+│               │ get_workspace_client()   │  (used by all tools)             │
+│               │ - Returns client with    │                                  │
+│               │   context credentials    │                                  │
+│               └──────────────────────────┘                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-On first use, the app discovers available tools by connecting to the MCP server:
-- Spawns the server via stdio
-- Calls `list_tools()` to get available operations
-- Caches the tool list for subsequent sessions
-- Tools are exposed as `mcp__databricks__<tool_name>`
+**How it works:**
 
-### 3. Skills System
+1. **Request arrives** - The FastAPI backend extracts credentials:
+   - **Production**: `X-Forwarded-User` and `X-Forwarded-Access-Token` headers (set by Databricks Apps proxy)
+   - **Development**: Falls back to `DATABRICKS_HOST` and `DATABRICKS_TOKEN` env vars
+
+2. **Auth context set** - Before invoking the agent:
+   ```python
+   from databricks_tools_core.auth import set_databricks_auth, clear_databricks_auth
+
+   set_databricks_auth(workspace_url, user_token)
+   try:
+       # All tool calls use this user's credentials
+       async for event in stream_agent_response(...):
+           yield event
+   finally:
+       clear_databricks_auth()
+   ```
+
+3. **Tools use context** - All Databricks tools call `get_workspace_client()` which:
+   - First checks contextvars for per-request credentials
+   - Falls back to environment variables if no context set
+
+This ensures each user's requests use their own Databricks credentials, enabling proper access control and audit logging.
+
+### 3. MCP Integration (Databricks Tools)
+
+Databricks tools are loaded in-process using the Claude Agent SDK's MCP server feature:
+
+```python
+from claude_agent_sdk import tool, create_sdk_mcp_server
+
+# Tools are dynamically loaded from databricks-mcp-server
+server = create_sdk_mcp_server(name='databricks', tools=sdk_tools)
+
+options = ClaudeAgentOptions(
+    mcp_servers={'databricks': server},
+    allowed_tools=['mcp__databricks__execute_sql', ...],
+)
+```
+
+Tools are exposed as `mcp__databricks__<tool_name>` and include:
+- SQL execution (`execute_sql`, `execute_sql_multi`)
+- Warehouse management (`list_warehouses`, `get_best_warehouse`)
+- Cluster execution (`execute_databricks_command`, `run_python_file_on_databricks`)
+- Pipeline management (`create_or_update_pipeline`, `start_update`, etc.)
+- File operations (`upload_file`, `upload_folder`)
+
+### 4. Skills System
 
 Skills provide specialized guidance for Databricks development tasks. They are markdown files with instructions and examples that Claude can load on demand.
 
@@ -110,7 +182,7 @@ Skills include:
 - **databricks-python-sdk**: Python SDK patterns
 - **synthetic-data-generation**: Creating test datasets
 
-### 4. Project Persistence
+### 5. Project Persistence
 
 Projects are stored in the local filesystem with automatic backup to PostgreSQL:
 
@@ -201,7 +273,8 @@ databricks-mcp-app/
 │   │   └── conversations.py
 │   └── services/          # Business logic
 │       ├── agent.py       # Claude Code session management
-│       ├── mcp_client.py  # MCP tool discovery
+│       ├── databricks_tools.py  # MCP tool loading from SDK
+│       ├── user.py        # User auth (headers/env vars)
 │       ├── skills_manager.py
 │       ├── backup_manager.py
 │       └── system_prompt.py

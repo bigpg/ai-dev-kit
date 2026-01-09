@@ -14,6 +14,8 @@ from typing import List, Optional
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.workspace import ImportFormat
 
+from ..auth import get_workspace_client
+
 
 @dataclass
 class UploadResult:
@@ -196,7 +198,7 @@ def upload_folder(
     workspace_folder = workspace_folder.rstrip('/')
 
     # Initialize client
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # Create all directories first
     directories = _collect_directories(local_folder)
@@ -308,7 +310,7 @@ def upload_file(
             error=f"Path is not a file: {local_path}"
         )
 
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # Create parent directory if needed
     parent_dir = str(Path(workspace_path).parent)

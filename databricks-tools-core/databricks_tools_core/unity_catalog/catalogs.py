@@ -4,8 +4,9 @@ Unity Catalog - Catalog Operations
 Functions for listing and getting catalog information.
 """
 from typing import List
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import CatalogInfo
+
+from ..auth import get_workspace_client
 
 
 def list_catalogs() -> List[CatalogInfo]:
@@ -18,7 +19,7 @@ def list_catalogs() -> List[CatalogInfo]:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return list(w.catalogs.list())
 
 
@@ -38,5 +39,5 @@ def get_catalog(catalog_name: str) -> CatalogInfo:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.catalogs.get(name=catalog_name)

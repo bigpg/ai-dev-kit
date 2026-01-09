@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUser } from '@/contexts/UserContext';
 import {
   Brain,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   Loader2,
   MessageSquare,
   Send,
@@ -129,9 +131,17 @@ function ActivitySection({
   );
 }
 
+// Convert email to schema name: quentin.ambard@databricks.com -> quentin_ambard
+function emailToSchemaName(email: string | null): string {
+  if (!email) return '';
+  const localPart = email.split('@')[0];
+  return localPart.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+}
+
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user, workspaceUrl } = useUser();
 
   // State
   const [project, setProject] = useState<Project | null>(null);
@@ -146,6 +156,11 @@ export default function ProjectPage() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [selectedClusterId, setSelectedClusterId] = useState<string | undefined>();
   const [clusterDropdownOpen, setClusterDropdownOpen] = useState(false);
+  const [defaultCatalog, setDefaultCatalog] = useState<string>('ai_dev_kit');
+  const [defaultSchema, setDefaultSchema] = useState<string>('');
+
+  // Calculate default schema from user email once available
+  const userDefaultSchema = useMemo(() => emailToSchemaName(user), [user]);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -180,6 +195,13 @@ export default function ProjectPage() {
           } else if (clustersData.length > 0) {
             setSelectedClusterId(clustersData[0].cluster_id);
           }
+          // Restore catalog/schema from conversation
+          if (conv.default_catalog) {
+            setDefaultCatalog(conv.default_catalog);
+          }
+          if (conv.default_schema) {
+            setDefaultSchema(conv.default_schema);
+          }
         } else if (clustersData.length > 0) {
           // No conversation yet, but still select first cluster
           setSelectedClusterId(clustersData[0].cluster_id);
@@ -212,6 +234,13 @@ export default function ProjectPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Set default schema from user email if not already set
+  useEffect(() => {
+    if (userDefaultSchema && !defaultSchema) {
+      setDefaultSchema(userDefaultSchema);
+    }
+  }, [userDefaultSchema, defaultSchema]);
+
   // Select a conversation
   const handleSelectConversation = async (conversationId: string) => {
     if (!projectId || currentConversation?.id === conversationId) return;
@@ -223,6 +252,9 @@ export default function ProjectPage() {
       setActivityItems([]);
       // Restore cluster selection from conversation, or default to first cluster
       setSelectedClusterId(conv.cluster_id || (clusters.length > 0 ? clusters[0].cluster_id : undefined));
+      // Restore catalog/schema from conversation, or use defaults
+      setDefaultCatalog(conv.default_catalog || 'ai_dev_kit');
+      setDefaultSchema(conv.default_schema || userDefaultSchema);
     } catch (error) {
       console.error('Failed to load conversation:', error);
       toast.error('Failed to load conversation');
@@ -306,6 +338,8 @@ export default function ProjectPage() {
         conversationId,
         message: userMessage,
         clusterId: selectedClusterId,
+        defaultCatalog,
+        defaultSchema,
         signal: abortControllerRef.current.signal,
         onEvent: (event) => {
           const type = event.type as string;
@@ -386,7 +420,7 @@ export default function ProjectPage() {
       toast.error('Failed to send message');
       setIsStreaming(false);
     }
-  }, [projectId, input, isStreaming, currentConversation?.id, selectedClusterId]);
+  }, [projectId, input, isStreaming, currentConversation?.id, selectedClusterId, defaultCatalog, defaultSchema]);
 
   // Handle keyboard submit
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -423,10 +457,46 @@ export default function ProjectPage() {
         {/* Chat Header */}
         {currentConversation && (
           <div className="flex h-14 items-center justify-between border-b border-[var(--color-border)] px-6 bg-[var(--color-bg-secondary)]/50">
-            <h2 className="font-medium text-[var(--color-text-heading)]">
+            <h2 className="font-medium text-[var(--color-text-heading)] truncate max-w-[200px]">
               {currentConversation.title}
             </h2>
-            {clusters.length > 0 && (
+            <div className="flex items-center gap-3">
+              {/* Catalog Input */}
+              <div className="flex items-center gap-1">
+                <label className="text-xs text-[var(--color-text-muted)]">Catalog:</label>
+                <input
+                  type="text"
+                  value={defaultCatalog}
+                  onChange={(e) => setDefaultCatalog(e.target.value)}
+                  placeholder="catalog"
+                  className="h-8 w-28 px-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-primary)]/50"
+                />
+              </div>
+              {/* Schema Input */}
+              <div className="flex items-center gap-1">
+                <label className="text-xs text-[var(--color-text-muted)]">Schema:</label>
+                <input
+                  type="text"
+                  value={defaultSchema}
+                  onChange={(e) => setDefaultSchema(e.target.value)}
+                  placeholder="schema"
+                  className="h-8 w-32 px-2 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-primary)]/50"
+                />
+              </div>
+              {/* Open Catalog Button */}
+              {workspaceUrl && defaultCatalog && defaultSchema && (
+                <a
+                  href={`${workspaceUrl}/explore/data/${defaultCatalog}/${defaultSchema}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center h-8 w-8 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-secondary)] hover:text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-primary)]/50 transition-colors"
+                  title="Open in Catalog Explorer"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+              {/* Cluster Dropdown */}
+              {clusters.length > 0 && (
               <div className="relative" ref={clusterDropdownRef}>
                 <button
                   onClick={() => setClusterDropdownOpen(!clusterDropdownOpen)}
@@ -472,7 +542,8 @@ export default function ProjectPage() {
                   </div>
                 )}
               </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 

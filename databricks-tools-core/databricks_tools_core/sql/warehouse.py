@@ -7,8 +7,9 @@ Functions for listing and selecting SQL warehouses.
 import logging
 from typing import Any, Dict, List, Optional
 
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import State
+
+from ..auth import get_workspace_client
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def list_warehouses(limit: int = 20) -> List[Dict[str, Any]]:
     Raises:
         Exception: If API request fails
     """
-    client = WorkspaceClient()
+    client = get_workspace_client()
 
     try:
         warehouses = list(client.warehouses.list())
@@ -82,7 +83,7 @@ def get_best_warehouse() -> Optional[str]:
     Raises:
         Exception: If API request fails
     """
-    client = WorkspaceClient()
+    client = get_workspace_client()
 
     try:
         warehouses = list(client.warehouses.list())

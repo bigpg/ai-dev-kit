@@ -1,8 +1,10 @@
-"""User service for getting the current authenticated user.
+"""User service for getting the current authenticated user and token.
 
-In production (Databricks Apps), the user email is available in the
-x-forwarded-user header. In development, we fall back to calling
-the WorkspaceClient /api/2.0/preview/scim/v2/Me endpoint.
+In production (Databricks Apps):
+- User email is available in the X-Forwarded-User header
+- Access token is available in the X-Forwarded-Access-Token header
+
+In development, we fall back to environment variables and WorkspaceClient.
 """
 
 import asyncio
@@ -28,7 +30,7 @@ def _is_local_development() -> bool:
 async def get_current_user(request: Request) -> str:
   """Get the current user's email from the request.
 
-  In production (Databricks Apps), extracts user from x-forwarded-user header.
+  In production (Databricks Apps), extracts user from X-Forwarded-User header.
   In development, calls WorkspaceClient.current_user.me() and caches the result.
 
   Args:
@@ -41,9 +43,9 @@ async def get_current_user(request: Request) -> str:
       ValueError: If user cannot be determined
   """
   # Try to get user from header first (production mode)
-  user = request.headers.get('x-forwarded-user')
+  user = request.headers.get('X-Forwarded-User')
   if user:
-    logger.debug(f'Got user from x-forwarded-user header: {user}')
+    logger.debug(f'Got user from X-Forwarded-User header: {user}')
     return user
 
   # Fall back to WorkspaceClient for development
@@ -52,9 +54,37 @@ async def get_current_user(request: Request) -> str:
 
   # Production without header - this shouldn't happen
   raise ValueError(
-    'No x-forwarded-user header found and not in development mode. '
+    'No X-Forwarded-User header found and not in development mode. '
     'Ensure the app is deployed with user authentication enabled.'
   )
+
+
+async def get_current_token(request: Request) -> str | None:
+  """Get the current user's Databricks access token.
+
+  In production (Databricks Apps), extracts from X-Forwarded-Access-Token header.
+  In development, uses DATABRICKS_TOKEN env var.
+
+  Args:
+      request: FastAPI Request object
+
+  Returns:
+      Access token string, or None if not available
+  """
+  # Try to get token from header first (production mode)
+  token = request.headers.get('X-Forwarded-Access-Token')
+  if token:
+    logger.debug('Got token from X-Forwarded-Access-Token header')
+    return token
+
+  # Fall back to env var for development
+  if _is_local_development():
+    token = os.getenv('DATABRICKS_TOKEN')
+    if token:
+      logger.debug('Got token from DATABRICKS_TOKEN env var')
+      return token
+
+  return None
 
 
 async def _get_dev_user() -> str:

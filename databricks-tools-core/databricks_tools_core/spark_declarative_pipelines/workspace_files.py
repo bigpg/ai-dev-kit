@@ -5,10 +5,11 @@ Functions for managing workspace files and directories for SDP pipelines.
 """
 import base64
 from typing import List
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.workspace import (
     ObjectInfo, Language, ImportFormat, ExportFormat
 )
+
+from ..auth import get_workspace_client
 
 
 def list_files(path: str) -> List[ObjectInfo]:
@@ -28,7 +29,7 @@ def list_files(path: str) -> List[ObjectInfo]:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return list(w.workspace.list(path=path))
 
 
@@ -52,7 +53,7 @@ def get_file_status(path: str) -> ObjectInfo:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     return w.workspace.get_status(path=path)
 
 
@@ -69,7 +70,7 @@ def read_file(path: str) -> str:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     response = w.workspace.export(path=path, format=ExportFormat.SOURCE)
 
     # SDK returns ExportResponse with .content field (base64 encoded)
@@ -94,7 +95,7 @@ def write_file(
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
 
     # Convert language string to enum
     lang_map = {
@@ -127,7 +128,7 @@ def create_directory(path: str) -> None:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.workspace.mkdirs(path=path)
 
 
@@ -142,5 +143,5 @@ def delete_path(path: str, recursive: bool = False) -> None:
     Raises:
         DatabricksError: If API request fails
     """
-    w = WorkspaceClient()
+    w = get_workspace_client()
     w.workspace.delete(path=path, recursive=recursive)
