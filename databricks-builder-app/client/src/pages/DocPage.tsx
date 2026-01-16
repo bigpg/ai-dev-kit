@@ -382,13 +382,15 @@ const coverageSections: CoverageSection[] = [
       { product: 'Lakeflow Spark Declarative Pipelines', skills: 'done', mcpFunctions: 'done', tested: 'done', functionalInApp: 'in-progress', owner: 'Cal Reynolds', date: 'Jan 13', comments: 'Tested with State Street example. Successful locally in deploying pipelines of python, sql and modifiable varieties (SCP, Iceberg, Clustering). \n\nNeeds claude-agent-sdk bug to be fixed to work with app' },
       { product: 'Lakeflow Jobs', skills: 'not-started', mcpFunctions: 'not-started', tested: 'not-started', owner: '' },
       { product: 'Synthetic Data Generation', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '' },
-      { product: 'Unstructured Data Generation', skills: 'in-progress', mcpFunctions: 'in-progress', tested: 'not-started', owner: 'Quentin' },
+      { product: 'PDF / Unstructured Data Generation', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: 'Quentin', comments: 'Generate realistic PDFs (invoices, contracts, reports) and unstructured data files. Uses LLM for content generation.' },
     ],
   },
   {
     title: 'ML / AI',
     items: [
-      { product: 'Agent Bricks', skills: 'in-progress', mcpFunctions: 'done', tested: 'not-started', owner: '' },
+      { product: 'Agent Bricks - Knowledge Assistant', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '', comments: 'Knowledge Assistant tile management' },
+      { product: 'Agent Bricks - Multi Agent Supervisor', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '', comments: 'Multi Agent Supervisor tile management' },
+      { product: 'Agent Bricks - Genie', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '', comments: 'Genie tile management' },
       { product: 'Model Serving', skills: 'not-started', mcpFunctions: 'not-started', tested: 'not-started', owner: '' },
       { product: 'Classic ML and MLFlow', skills: 'not-started', mcpFunctions: 'not-started', tested: 'not-started', owner: '' },
     ],
@@ -398,7 +400,6 @@ const coverageSections: CoverageSection[] = [
     items: [
       { product: 'DBSQL', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '' },
       { product: 'Unity Catalog', skills: 'done', mcpFunctions: 'done', tested: 'done', owner: '' },
-      { product: 'AI/BI Genie', skills: 'not-started', mcpFunctions: 'in-progress', tested: 'not-started', owner: '' },
       { product: 'AI/BI Dashboards', skills: 'not-started', mcpFunctions: 'not-started', tested: 'not-started', owner: '' },
     ],
   },
