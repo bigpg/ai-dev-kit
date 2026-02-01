@@ -169,6 +169,14 @@ Claude now has both:
 | `publish_dashboard` | Publish a dashboard to make it accessible |
 | `unpublish_dashboard` | Unpublish a dashboard |
 
+### Model Serving
+
+| Tool | Description |
+|------|-------------|
+| `get_serving_endpoint_status` | Get the status of a Model Serving endpoint |
+| `query_serving_endpoint` | Query a Model Serving endpoint with chat or ML model inputs |
+| `list_serving_endpoints` | List all Model Serving endpoints in the workspace |
+
 ## Architecture
 
 ```
@@ -192,7 +200,8 @@ Claude now has both:
 │  tools/jobs.py ─────────────┼──► @mcp.tool decorators       │
 │  tools/pipelines.py ────────┤                               │
 │  tools/agent_bricks.py ─────┤                               │
-│  tools/aibi_dashboards.py ──┘                               │
+│  tools/aibi_dashboards.py ──┤                               │
+│  tools/serving.py ──────────┘                               │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Python imports
                                ▼
