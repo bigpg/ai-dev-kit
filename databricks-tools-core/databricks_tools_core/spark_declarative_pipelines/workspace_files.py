@@ -3,11 +3,10 @@ Spark Declarative Pipelines - Workspace File Operations
 
 Functions for managing workspace files and directories for SDP pipelines.
 """
+
 import base64
 from typing import List
-from databricks.sdk.service.workspace import (
-    ObjectInfo, Language, ImportFormat, ExportFormat
-)
+from databricks.sdk.service.workspace import ObjectInfo, Language, ImportFormat, ExportFormat
 
 from ..auth import get_workspace_client
 
@@ -77,12 +76,7 @@ def read_file(path: str) -> str:
     return base64.b64decode(response.content).decode("utf-8")
 
 
-def write_file(
-    path: str,
-    content: str,
-    language: str = "PYTHON",
-    overwrite: bool = True
-) -> None:
+def write_file(path: str, content: str, language: str = "PYTHON", overwrite: bool = True) -> None:
     """
     Write or update workspace file.
 
@@ -102,7 +96,7 @@ def write_file(
         "PYTHON": Language.PYTHON,
         "SQL": Language.SQL,
         "SCALA": Language.SCALA,
-        "R": Language.R
+        "R": Language.R,
     }
     lang_enum = lang_map.get(language.upper(), Language.PYTHON)
 
@@ -114,7 +108,7 @@ def write_file(
         content=content_b64,
         language=lang_enum,
         format=ImportFormat.SOURCE,
-        overwrite=overwrite
+        overwrite=overwrite,
     )
 
 
