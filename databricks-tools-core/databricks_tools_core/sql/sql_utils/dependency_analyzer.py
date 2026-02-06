@@ -57,10 +57,7 @@ class SQLDependencyAnalyzer:
         cleaned = self._strip_comments(sql_content)
 
         queries: List[str] = []
-        statements = [
-            s for s in (sqlglot.parse(cleaned, read=self.dialect) or [])
-            if s is not None
-        ]
+        statements = [s for s in (sqlglot.parse(cleaned, read=self.dialect) or []) if s is not None]
 
         for stmt in statements:
             sql = stmt.sql(dialect=self.dialect).strip().rstrip(";")
@@ -92,10 +89,7 @@ class SQLDependencyAnalyzer:
 
         # Pass 1: Discover created objects and references
         for idx, query in enumerate(queries):
-            exprs = [
-                e for e in (sqlglot.parse(query, read=self.dialect) or [])
-                if e is not None
-            ]
+            exprs = [e for e in (sqlglot.parse(query, read=self.dialect) or []) if e is not None]
 
             created_here: Set[str] = set()
             referenced_here: Set[str] = set()
@@ -171,9 +165,7 @@ class SQLDependencyAnalyzer:
             logger.warning(f"Failed to strip comments with sqlfluff: {e}")
             return sql
 
-    def _topological_sort(
-        self, num_queries: int, dependencies: Dict[int, Set[int]]
-    ) -> List[List[int]]:
+    def _topological_sort(self, num_queries: int, dependencies: Dict[int, Set[int]]) -> List[List[int]]:
         """
         Kahn's algorithm for levelized topological ordering.
 
@@ -272,14 +264,14 @@ class SQLDependencyAnalyzer:
             return None
         if isinstance(table_exp, exp.Table):
             name = table_exp.name or ""
-            return name.strip("`\"").lower() or None
+            return name.strip('`"').lower() or None
         if hasattr(table_exp, "name"):
-            name = getattr(table_exp, "name")
+            name = table_exp.name
             if isinstance(name, str):
-                return name.strip("`\"").lower() or None
+                return name.strip('`"').lower() or None
         if hasattr(table_exp, "this") and isinstance(table_exp.this, exp.Table):
             name = table_exp.this.name or ""
-            return name.strip("`\"").lower() or None
+            return name.strip('`"').lower() or None
         return None
 
     def _table_from_create(self, node: exp.Create) -> Optional[exp.Table]:

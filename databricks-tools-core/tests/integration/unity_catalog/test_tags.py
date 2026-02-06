@@ -55,9 +55,7 @@ class TestSetTags:
         assert result["status"] == "tags_set"
         logger.info(f"Column tags set: {result['tags']}")
 
-    def test_set_tags_on_schema(
-        self, test_catalog: str, uc_test_schema: str, warehouse_id: str
-    ):
+    def test_set_tags_on_schema(self, test_catalog: str, uc_test_schema: str, warehouse_id: str):
         """Should set tags on a schema."""
         full_name = f"{test_catalog}.{uc_test_schema}"
         # Use unique prefixed tag names to avoid workspace governed tag policies
@@ -171,7 +169,7 @@ class TestSetComment:
         )
 
         assert result["status"] == "comment_set"
-        logger.info(f"Column comment set on salary")
+        logger.info("Column comment set on salary")
 
     def test_set_comment_column_without_name_raises(self, uc_test_table: str):
         """Should raise ValueError when column_name missing for column type."""

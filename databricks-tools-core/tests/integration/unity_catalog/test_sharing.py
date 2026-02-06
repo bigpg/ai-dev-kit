@@ -39,10 +39,17 @@ UC_TEST_PREFIX = "uc_test"
 def _is_sharing_error(e: Exception) -> bool:
     """Check if error indicates sharing is not available."""
     msg = str(e).upper()
-    return any(kw in msg for kw in [
-        "FEATURE_NOT_ENABLED", "NOT_FOUND", "FORBIDDEN", "PERMISSION_DENIED",
-        "DELTA_SHARING", "NOT_AVAILABLE",
-    ])
+    return any(
+        kw in msg
+        for kw in [
+            "FEATURE_NOT_ENABLED",
+            "NOT_FOUND",
+            "FORBIDDEN",
+            "PERMISSION_DENIED",
+            "DELTA_SHARING",
+            "NOT_AVAILABLE",
+        ]
+    )
 
 
 @pytest.mark.integration
@@ -65,9 +72,7 @@ class TestListShares:
 class TestShareCRUD:
     """Tests for share create, get, delete lifecycle."""
 
-    def test_create_and_delete_share(
-        self, unique_name: str, cleanup_shares
-    ):
+    def test_create_and_delete_share(self, unique_name: str, cleanup_shares):
         """Should create and delete a share."""
         share_name = f"{UC_TEST_PREFIX}_share_{unique_name}"
 
@@ -113,7 +118,7 @@ class TestShareCRUD:
                 table_name=uc_test_table,
             )
             assert result is not None
-            logger.info(f"Table added to share")
+            logger.info("Table added to share")
 
             # Verify table is in share
             share = get_share(share_name, include_shared_data=True)
@@ -121,13 +126,13 @@ class TestShareCRUD:
             logger.info(f"Share has {len(objects)} objects")
 
             # Remove table
-            logger.info(f"Removing table from share")
+            logger.info("Removing table from share")
             remove_result = remove_table_from_share(
                 share_name=share_name,
                 table_name=uc_test_table,
             )
             assert remove_result is not None
-            logger.info(f"Table removed from share")
+            logger.info("Table removed from share")
 
         except Exception as e:
             if _is_sharing_error(e):
@@ -139,9 +144,7 @@ class TestShareCRUD:
 class TestRecipientCRUD:
     """Tests for recipient create, get, delete lifecycle."""
 
-    def test_create_and_delete_recipient(
-        self, unique_name: str, cleanup_recipients
-    ):
+    def test_create_and_delete_recipient(self, unique_name: str, cleanup_recipients):
         """Should create and delete a sharing recipient."""
         recipient_name = f"{UC_TEST_PREFIX}_recipient_{unique_name}"
 
@@ -214,7 +217,7 @@ class TestSharePermissions:
             logger.info(f"Share granted: {grant_result}")
 
             # Revoke
-            logger.info(f"Revoking share from recipient")
+            logger.info("Revoking share from recipient")
             revoke_result = revoke_share_from_recipient(
                 share_name=share_name,
                 recipient_name=recipient_name,
