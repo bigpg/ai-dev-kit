@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Exception: frontend source lib (Python ignores lib/ for build artifacts)
+!databricks-builder-app/client/src/lib/
 parts/
 sdist/
 var/
