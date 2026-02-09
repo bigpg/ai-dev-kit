@@ -1,0 +1,20 @@
+# Databricks MCP App Dependencies
+
+# Core MCP server packages (installed as editable from sibling directories)
+# In production, these would be installed from PyPI or a private registry
+databricks-tools-core @ file:../databricks-tools-core
+databricks-mcp-server @ file:../databricks-mcp-server
+
+# FastMCP for MCP protocol support
+fastmcp>=2.0.0
+
+# Databricks SDK for API operations
+databricks-sdk>=0.81.0
+
+# Additional dependencies inherited from databricks-tools-core:
+# - requests
+# - pydantic
+# - sqlglot
+# - sqlfluff
+# - litellm
+# - pymupdf
